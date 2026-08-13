@@ -1,7 +1,4 @@
-# Render Blueprint
-# https://render.com/docs/blueprint-spec
 services:
-  # ==================== Order Service ====================
   - type: web
     name: order-service
     env: docker
@@ -25,7 +22,7 @@ services:
           name: orders-db
           property: connectionString
       - key: KAFKA_BOOTSTRAP_SERVERS
-        value: "kafka:29092"  # Will be replaced with Aiven later
+        value: "kafka:29092"
       - key: KAFKA_SECURITY_PROTOCOL
         value: "PLAINTEXT"
       - key: KAFKA_TOPIC_ORDERS
@@ -40,7 +37,6 @@ services:
           name: app-redis
           property: connectionString
 
-  # ==================== User Service ====================
   - type: web
     name: user-service
     env: docker
@@ -79,7 +75,6 @@ services:
           name: app-redis
           property: connectionString
 
-  # ==================== Notification Service ====================
   - type: web
     name: notification-service
     env: docker
@@ -118,7 +113,6 @@ services:
           name: app-redis
           property: connectionString
 
-  # ==================== Workflow Service ====================
   - type: web
     name: workflow-service
     env: docker
@@ -155,7 +149,6 @@ services:
           name: app-redis
           property: connectionString
 
-  # ==================== Frontend ====================
   - type: web
     name: event-driven-frontend
     env: static
@@ -174,11 +167,3 @@ databases:
   - name: workflows-db
     databaseName: workflows
     plan: free
-
-  # ==================== Redis ====================
-  - type: redis
-    name: app-redis
-    plan: free
-    maxmemoryPolicy: noeviction
-
- databases:
