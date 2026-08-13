@@ -1,6 +1,5 @@
 # Render Blueprint
 # https://render.com/docs/blueprint-spec
-
 services:
   # ==================== Order Service ====================
   - type: web
