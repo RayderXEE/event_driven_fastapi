@@ -1,11 +1,9 @@
-name: CD — Deploy (Single Server)
+name: CD — Deploy to Render
 
 on:
   push:
     branches:
-      - develop    # → Staging
-  release:
-    types: [published]  # → Production
+      - main    # → Production
 
 concurrency:
   group: deploy-${{ github.ref }}
@@ -15,9 +13,6 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAMESPACE: ${{ github.repository }}
 
-# ================================================================
-# Build & Push Docker Images
-# ================================================================
 jobs:
   build-and-push:
     name: Build & Push Images
@@ -55,9 +50,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}
           tags: |
             type=sha,prefix=
-            type=raw,value=staging,enable=${{ github.ref == 'refs/heads/develop' }}
-            type=ref,event=tag,enable=${{ github.event_name == 'release' }}
-            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+            type=raw,value=latest
 
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -70,97 +63,36 @@ jobs:
           cache-to: type=gha,mode=max
           dockerfile: ./services/${{ matrix.service }}/Dockerfile
 
-# ================================================================
-# STAGING — deploy staging images to server
-# ================================================================
-  deploy-staging:
-    name: Deploy Staging
+  deploy-to-render:
+    name: Deploy to Render
     needs: build-and-push
-    if: github.ref == 'refs/heads/develop'
-    runs-on: ubuntu-latest
-    environment: staging
-
-    steps:
-      - name: Deploy to server
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            cd /opt/event_driven_fastapi
-            # Pull latest staging images
-            docker compose pull
-            # Restart with staging tag
-            docker compose up -d --remove-orphans
-            # Clean old images
-            docker image prune -f
-
-      - name: Health check
-        uses: appleboy/ssh-action@master
-        if: success()
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            echo "=== Staging Health Check ==="
-            for port in 8001 8002 8003 8004; do
-              echo "Checking port $port..."
-              for i in {1..15}; do
-                if curl -sf "http://localhost:$port/health" > /dev/null; then
-                  echo "  ✓ Port $port is healthy"
-                  break
-                fi
-                sleep 2
-              done
-            done
-
-# ================================================================
-# PRODUCTION — deploy release images to same server
-# ================================================================
-  deploy-production:
-    name: Deploy Production
-    needs: build-and-push
-    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     environment: production
 
     steps:
-      - name: Deploy to server
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            cd /opt/event_driven_fastapi
-            # Pull latest release images
-            docker compose pull
-            # Restart with release tag
-            docker compose up -d --remove-orphans
-            # Clean old images
-            docker image prune -f
+      - name: Trigger Render Deploy
+        run: |
+          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
+          echo "Render deploy triggered!"
 
-      - name: Health check
-        uses: appleboy/ssh-action@master
-        if: success()
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          script: |
-            echo "=== Production Health Check ==="
-            for port in 8001 8002 8003 8004; do
-              echo "Checking port $port..."
-              for i in {1..20}; do
-                if curl -sf "http://localhost:$port/health" > /dev/null; then
-                  echo "  ✓ Port $port is healthy"
-                  break
-                fi
-                sleep 3
-              done
+      - name: Wait for Render Deploy
+        run: |
+          echo "Waiting for Render to finish deploying..."
+          sleep 60  # Adjust based on your deploy time
+
+      - name: Health Check
+        run: |
+          echo "=== Health Check ==="
+          for service in order-service user-service notification-service workflow-service; do
+            echo "Checking $service..."
+            for i in {1..15}; do
+              if curl -sf "https://${service}-onrender.com/health" > /dev/null; then
+                echo "  ✓ $service is healthy"
+                break
+              fi
+              sleep 2
             done
+          done
 
       - name: Notify Slack
         if: success()
@@ -168,7 +100,7 @@ jobs:
         with:
           payload: |
             {
-              "text": ":rocket: Production deployed: ${{ github.event.release.tag_name }}"
+              "text": ":rocket: Deployed to Render: ${{ github.sha }}"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
