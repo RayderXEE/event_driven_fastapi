@@ -1,0 +1,36 @@
+# Ruff configuration
+# https://docs.astral.sh/ruff/configuration/
+
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "N",      # pep8-naming
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "SIM",    # flake8-simplify
+    "T20",    # flake8-print
+    "RUF",    # ruff-specific rules
+]
+
+ignore = [
+    "E501",   # line length (handled by formatter)
+    "F401",   # unused imports (handled by __init__.py)
+    "RUF012", # mutable class-default (Pydantic models)
+]
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/**" = ["T20", "B018"]
+"services/**/app/main.py" = ["T20"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"

@@ -1,0 +1,14 @@
+FROM redpandadata/redpanda:latest
+
+# Configure Redpanda as Kafka-compatible broker
+RUN redpanda mode dev \
+    --overridden-flag 'kafka-address=0.0.0.0:29092' \
+    --overridden-flag 'rpc-server-address=0.0.0.0:33145'
+
+EXPOSE 29092 9644
+
+# Health check via HTTP admin API
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=5 \
+    CMD curl -f http://localhost:9644/v1/status/ready || exit 1
+
+CMD ["redpanda", "start", "--mode", "dev", "--smp", "1", "--memory", "512M", "--reserve-memory", "0M"]

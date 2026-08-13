@@ -1,0 +1,305 @@
+version: '3.8'
+
+services:
+  # ==================== Order Service ====================
+  order-service:
+    build:
+      context: .
+      dockerfile: ./services/order-service/Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      - APP_NAME=Order Service
+      - DEBUG=true
+      - DATABASE_URL=postgresql+asyncpg://order_user:order_pass@postgres_orders:5432/orders
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KAFKA_TOPIC_ORDERS=orders
+      - KAFKA_TOPIC_PAYMENTS=payments
+      - KAFKA_GROUP_ID=order-service
+      - REDIS_URL=redis://redis:6379/0
+      - OTEL_ENABLED=true
+      - OTEL_ENDPOINT=jaeger:4317
+    depends_on:
+      postgres_orders:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # ==================== User Service ====================
+  user-service:
+    build:
+      context: .
+      dockerfile: ./services/user-service/Dockerfile
+    ports:
+      - "8002:8000"
+    environment:
+      - APP_NAME=User Service
+      - DEBUG=true
+      - DATABASE_URL=postgresql+asyncpg://user_user:user_pass@postgres_users:5432/users
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KAFKA_TOPIC_USERS=users
+      - KAFKA_TOPIC_ORDERS=orders
+      - KAFKA_GROUP_ID=user-service
+      - REDIS_URL=redis://redis:6379/1
+      - OTEL_ENABLED=true
+      - OTEL_ENDPOINT=jaeger:4317
+    depends_on:
+      postgres_users:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # ==================== Notification Service ====================
+  notification-service:
+    build:
+      context: .
+      dockerfile: ./services/notification-service/Dockerfile
+    ports:
+      - "8003:8000"
+    environment:
+      - APP_NAME=Notification Service
+      - DEBUG=true
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KAFKA_TOPIC_ORDERS=orders
+      - KAFKA_TOPIC_USERS=users
+      - KAFKA_TOPIC_WORKFLOWS=workflows
+      - KAFKA_TOPIC_NOTIFICATIONS=notifications
+      - KAFKA_GROUP_ID=notification-service
+      - REDIS_URL=redis://redis:6379/2
+      - SMTP_HOST=localhost
+      - SMTP_PORT=1025
+      - OTEL_ENABLED=true
+      - OTEL_ENDPOINT=jaeger:4317
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      mailhog:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # ==================== Workflow Service ====================
+  workflow-service:
+    build:
+      context: .
+      dockerfile: ./services/workflow-service/Dockerfile
+    ports:
+      - "8004:8000"
+    environment:
+      - APP_NAME=Workflow Service
+      - DEBUG=true
+      - DATABASE_URL=postgresql+asyncpg://workflow_user:workflow_pass@postgres_workflow:5432/workflows
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - KAFKA_TOPIC_WORKFLOWS=workflows
+      - KAFKA_GROUP_ID=workflow-service
+      - REDIS_URL=redis://redis:6379/3
+      - OTEL_ENABLED=true
+      - OTEL_ENDPOINT=jaeger:4317
+    depends_on:
+      postgres_workflow:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # ==================== Databases ====================
+  postgres_orders:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: order_user
+      POSTGRES_PASSWORD: order_pass
+      POSTGRES_DB: orders
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_orders:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U order_user -d orders"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  postgres_users:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: user_user
+      POSTGRES_PASSWORD: user_pass
+      POSTGRES_DB: users
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata_users:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user_user -d users"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  postgres_workflow:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: workflow_user
+      POSTGRES_PASSWORD: workflow_pass
+      POSTGRES_DB: workflows
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata_workflow:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workflow_user -d workflows"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # ==================== Redis ====================
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+    networks:
+      - app-network
+
+  # ==================== Kafka ====================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - app-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - app-network
+
+  # ==================== Monitoring ====================
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - app-network
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+    depends_on:
+      - prometheus
+    networks:
+      - app-network
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    networks:
+      - app-network
+
+  # ==================== Nginx Reverse Proxy ====================
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - order-service
+      - user-service
+      - notification-service
+      - workflow-service
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # ==================== Frontend ====================
+  frontend:
+    build:
+      context: .
+      dockerfile: ./frontend/Dockerfile
+    ports:
+      - "3001:80"
+    depends_on:
+      - order-service
+      - user-service
+      - notification-service
+      - workflow-service
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # ==================== Email Testing ====================
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - app-network
+
+volumes:
+  pgdata_orders:
+  pgdata_users:
+  pgdata_workflow:
+
+networks:
+  app-network:
+    driver: bridge

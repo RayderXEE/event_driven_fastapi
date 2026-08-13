@@ -1,0 +1,40 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+.env.*
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.pytest_cache
+.coverage
+htmlcov/
+.mypy_cache/
+alembic/versions/*.py
+*.log
+
+# ── Frontend ─────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/dist/
+
+# ── CI/CD & Testing ─────────────────────────────────────────────
+.coverage.*
+coverage.xml
+*.sarif
+code-coverage-results.md
+
+# ── IDE ──────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS ────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Hosting credentials ───────────────────────────────────────────
+hosting/

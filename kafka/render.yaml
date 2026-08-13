@@ -1,0 +1,8 @@
+name: Kafka Broker
+env: docker
+region: oregon
+plan: free
+healthCheckPath: /
+
+# Render doesn't support raw Kafka as Web Service well.
+# This is a workaround — see README for alternatives.

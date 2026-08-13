@@ -1,0 +1,62 @@
+# Pre-commit hooks configuration
+# Install: pip install pre-commit
+# Enable: pre-commit install
+
+default_language_version:
+  python: python3.12
+
+repos:
+  # ---------- Cleanup ----------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+      - id: check-json
+      - id: check-toml
+      - id: detect-private-key
+
+  # ---------- Python: Ruff (linting + formatting) ----------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # ---------- Python: Type checking ----------
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - types-all
+          - pydantic>=2.5.0
+          - sqlalchemy>=2.0.0
+          - asyncpg>=0.29.0
+          - aiokafka>=0.11.0
+          - fastapi>=0.109.0
+        exclude: |
+          (?x)^(
+              tests/|
+              alembic/versions/
+          )$
+
+  # ---------- Docker ----------
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.13.0-beta
+    hooks:
+      - id: hadolint-docker
+        args: ['--failure-threshold=warning']
+
+  # ---------- YAML ----------
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: ['-d', 'relaxed']
