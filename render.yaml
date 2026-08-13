@@ -176,7 +176,10 @@ databases:
     databaseName: workflows
     plan: free
 
-addons:
+  # ==================== Redis ====================
   - type: redis
     name: app-redis
     plan: free
+    maxmemoryPolicy: noeviction
+
+ databases:
